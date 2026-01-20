@@ -2,26 +2,29 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>3D Birthday Cake Particles</title>
+    <title>3-Tier Birthday Cake Gesture</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0010; font-family: sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 12px; border: 1px solid #ff00ff; }
-        #video_container { position: absolute; bottom: 15px; right: 15px; width: 150px; height: 110px; border-radius: 8px; overflow: hidden; transform: scaleX(-1); border: 1px solid #ff00ff; }
+        body { margin: 0; overflow: hidden; background: #050005; font-family: 'Segoe UI', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+        #video_container { position: absolute; bottom: 15px; right: 15px; width: 160px; height: 120px; border-radius: 10px; overflow: hidden; transform: scaleX(-1); border: 2px solid #ff00ff; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .hint { font-size: 11px; color: #ff99ff; margin-top: 8px; }
-        input[type="color"] { width: 100%; height: 30px; cursor: pointer; border: none; background: none; }
+        .instructions { font-size: 11px; color: #ffccff; margin-top: 10px; line-height: 1.5; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <h3 style="margin:0; color: #ff66cc;">Bánh Sinh Nhật Hạt 3D</h3>
-    <input type="color" id="colorPicker" value="#ff66cc">
-    <div id="status" style="margin-top:10px; font-size:12px">Đang tải...</div>
-    <div class="hint">• Chụm tay: Hiện bánh sinh nhật<br>• Xòe tay: Mở quà (Hiện ảnh)</div>
+    <h3 style="margin:0; color: #ff3399;">Bánh Sinh Nhật 3 Tầng</h3>
+    <input type="color" id="colorPicker" value="#ff3399" style="width:100%; margin-top:10px;">
+    <div id="status" style="font-size:12px; margin-top:5px; color:#00ff00;">Đang khởi động camera...</div>
+    <div class="instructions">
+        • <b>Xoay:</b> Di chuyển ngón trỏ sang trái/phải<br>
+        • <b>Mở quà:</b> Xòe cả bàn tay để hiện ảnh<br>
+        • <b>Đứng yên:</b> Khép bàn tay lại
+    </div>
 </div>
 
 <div id="video_container">
@@ -29,140 +32,123 @@
 </div>
 
 <script>
+    // --- KHỞI TẠO SCENE ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
+    camera.position.z = 600;
 
-    camera.position.z = 500;
-
-    // --- TẢI ẢNH (QUÀ TẶNG) ---
-    const loader = new THREE.TextureLoader();
-    // THAY LINK ẢNH CỦA BẠN TẠI ĐÂY
-    const imgUrl = 'sinhnhat.jpg'; 
+    // --- NẠP ẢNH TỪ MÁY TÍNH ---
+    const imgUrl = 'sinhnhat.jpg'; // <-- ĐẢM BẢO FILE NÀY NẰM CÙNG THƯ MỤC
     let photoMesh;
-    loader.load(imgUrl, (texture) => {
-        const geometry = new THREE.PlaneGeometry(300, 300);
-        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0 });
-        photoMesh = new THREE.Mesh(geometry, material);
-        photoMesh.position.z = -20;
+    new THREE.TextureLoader().load(imgUrl, (texture) => {
+        const geo = new THREE.PlaneGeometry(300, 300);
+        const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0 });
+        photoMesh = new THREE.Mesh(geo, mat);
         scene.add(photoMesh);
     });
 
-    // --- TẠO HÌNH BÁNH SINH NHẬT TỪ HẠT ---
-    const particleCount = 6000;
+    // --- TẠO BÁNH 3 TẦNG ---
+    const particleCount = 8000;
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(particleCount * 3);
     const dest = new Float32Array(particleCount * 3);
 
-    for (let i = 0; i < particleCount; i++) {
-        let x, y, z;
-        
-        // Chia hạt thành 3 phần: Thân bánh, mặt bánh và nến
-        if (i < 4000) { 
-            // Thân bánh (Hình trụ)
+    function createTier(startIndex, count, radius, bottom, top) {
+        for (let i = startIndex; i < startIndex + count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const radius = 120;
-            const height = Math.random() * 100 - 50;
-            x = Math.cos(angle) * radius;
-            z = Math.sin(angle) * radius;
-            y = height;
-        } else if (i < 5500) { 
-            // Mặt bánh (Hình tròn phẳng)
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * 120;
-            x = Math.cos(angle) * radius;
-            z = Math.sin(angle) * radius;
-            y = 50;
-        } else { 
-            // Cây nến (Trụ nhỏ ở giữa)
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * 5;
-            x = Math.cos(angle) * radius;
-            z = Math.sin(angle) * radius;
-            y = 50 + Math.random() * 60;
+            const r = Math.random() < 0.2 ? Math.random() * radius : radius; // Hạt ở vỏ và ruột
+            const h = Math.random() * (top - bottom) + bottom;
+            
+            pos[i * 3] = Math.cos(angle) * r;
+            pos[i * 3 + 1] = h;
+            pos[i * 3 + 2] = Math.sin(angle) * r;
+            
+            dest[i * 3] = pos[i * 3] * 5;
+            dest[i * 3 + 1] = pos[i * 3 + 1] * 5;
+            dest[i * 3 + 2] = pos[i * 3 + 2] * 5;
         }
-
-        pos[i * 3] = x;
-        pos[i * 3 + 1] = y;
-        pos[i * 3 + 2] = z;
-
-        // Vị trí bung tỏa khi mở tay (nổ tung như pháo hoa)
-        dest[i * 3] = x * 4;
-        dest[i * 3 + 1] = y * 4;
-        dest[i * 3 + 2] = z * 4;
     }
 
+    // Tầng 1 (Dưới cùng)
+    createTier(0, 3500, 150, -100, -20);
+    // Tầng 2 (Giữa)
+    createTier(3500, 2500, 100, -20, 50);
+    // Tầng 3 (Trên cùng)
+    createTier(6000, 1500, 60, 50, 100);
+    // Nến
+    createTier(7500, 500, 5, 100, 150);
+
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-    const mat = new THREE.PointsMaterial({ size: 2, color: 0xff66cc, transparent: true, blending: THREE.AdditiveBlending });
+    const mat = new THREE.PointsMaterial({ size: 2, color: 0xff3399, transparent: true, blending: THREE.AdditiveBlending });
     const points = new THREE.Points(geo, mat);
     scene.add(points);
 
-    // --- AI HANDS ---
+    // --- XỬ LÝ AI ---
     const videoElement = document.getElementById('input_video');
     let revealFactor = 0;
-    let targetRotY = 0;
+    let rotationSpeed = 0;
 
     function onResults(results) {
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            document.getElementById('status').innerText = "AI đã sẵn sàng!";
             const hand = results.multiHandLandmarks[0];
-            targetRotY = (hand[0].x - 0.5) * 4;
-            const d = Math.sqrt(Math.pow(hand[4].x - hand[8].x, 2) + Math.pow(hand[4].y - hand[8].y, 2));
-            revealFactor = Math.min(Math.max((d - 0.05) * 8, 0), 1);
+            
+            // 1. Kiểm tra xoay: Dựa vào vị trí ngón trỏ (điểm 8) so với tâm màn hình (0.5)
+            const indexFinger = hand[8];
+            if (Math.abs(indexFinger.x - 0.5) > 0.1) {
+                rotationSpeed = (indexFinger.x - 0.5) * 0.1;
+            } else {
+                rotationSpeed = 0;
+            }
+
+            // 2. Kiểm tra mở lòng bàn tay: So sánh các đầu ngón tay với gốc ngón tay
+            // Nếu các đầu ngón (8,12,16,20) đều cao hơn gốc (6,10,14,18) -> Đang mở tay
+            const isOpened = hand[8].y < hand[6].y && hand[12].y < hand[10].y && hand[16].y < hand[14].y;
+            revealFactor = THREE.MathUtils.lerp(revealFactor, isOpened ? 1 : 0, 0.1);
         } else {
-            revealFactor = 0;
+            rotationSpeed = 0;
+            revealFactor = THREE.MathUtils.lerp(revealFactor, 0, 0.1);
         }
     }
 
     const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
     hands.onResults(onResults);
-
-    new Camera(videoElement, {
-        onFrame: async () => { await hands.send({image: videoElement}); },
-        width: 640, height: 480
-    }).start();
+    new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 640, height: 480 }).start();
 
     // --- ANIMATION ---
     function animate() {
         requestAnimationFrame(animate);
 
-        points.rotation.y += 0.01 + (targetRotY * 0.02);
+        points.rotation.y += rotationSpeed;
         if(photoMesh) photoMesh.rotation.y = points.rotation.y;
 
-        const currentPos = geo.attributes.position.array;
+        const pArray = geo.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
-            const targetX = pos[i3] + (dest[i3] - pos[i3]) * revealFactor;
-            const targetY = pos[i3+1] + (dest[i3+1] - pos[i3+1]) * revealFactor;
-            const targetZ = pos[i3+2] + (dest[i3+2] - pos[i3+2]) * revealFactor;
-
-            currentPos[i3] += (targetX - currentPos[i3]) * 0.1;
-            currentPos[i3+1] += (targetY - currentPos[i3+1]) * 0.1;
-            currentPos[i3+2] += (targetZ - currentPos[i3+2]) * 0.1;
+            pArray[i3] += ((pos[i3] + (dest[i3] - pos[i3]) * revealFactor) - pArray[i3]) * 0.1;
+            pArray[i3+1] += ((pos[i3+1] + (dest[i3+1] - pos[i3+1]) * revealFactor) - pArray[i3+1]) * 0.1;
+            pArray[i3+2] += ((pos[i3+2] + (dest[i3+2] - pos[i3+2]) * revealFactor) - pArray[i3+2]) * 0.1;
         }
         geo.attributes.position.needsUpdate = true;
 
-        if (photoMesh) {
+        if(photoMesh) {
             photoMesh.material.opacity = revealFactor;
             photoMesh.scale.set(revealFactor, revealFactor, revealFactor);
         }
-
         renderer.render(scene, camera);
     }
+    animate();
 
-    document.getElementById('colorPicker').addEventListener('input', (e) => {
-        mat.color.set(e.target.value);
-    });
-
+    document.getElementById('colorPicker').oninput = (e) => mat.color.set(e.target.value);
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
-    animate();
 </script>
 </body>
 </html>
