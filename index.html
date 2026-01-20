@@ -2,10 +2,10 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>One-Hand 3D Particle Control</title>
+    <title>3D Particle Sphere with Image Reveal</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
@@ -18,12 +18,12 @@
 <body>
 
 <div id="ui">
-    <h2 style="margin:0 0 10px 0; font-size: 18px;">One-Hand Control</h2>
-    <input type="color" id="colorPicker" value="#00ffcc">
-    <div id="status" style="margin-top:10px; color:#00ffcc; font-size:13px">Khởi tạo AI...</div>
+    <h2 style="margin:0 0 10px 0; font-size: 18px;">Điều khiển ảnh hạt 3D</h2>
+    <input type="color" id="colorPicker" value="#9933ff">
+    <div id="status" style="margin-top:10px; color:#9933ff; font-size:13px">Khởi tạo AI...</div>
     <div class="hint">
         • Di chuyển tay để xoay & di chuyển<br>
-        • Chụm/Xòe ngón cái & trỏ để thu phóng
+        • Chụm/Xòe ngón cái & trỏ để thu phóng và hiển thị ảnh
     </div>
 </div>
 
@@ -35,7 +35,7 @@
     // --- CẤU HÌNH THREE.JS ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: true cho phép nền trong suốt
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
@@ -68,7 +68,7 @@
     geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
     const material = new THREE.PointsMaterial({
         size: 2.5,
-        color: 0x00ffcc,
+        color: 0x9933ff, // Màu mặc định
         transparent: true,
         blending: THREE.AdditiveBlending,
         opacity: 0.8
@@ -77,13 +77,44 @@
     const particleSystem = new THREE.Points(geometry, material);
     scene.add(particleSystem);
 
+    // --- HIỆU ỨNG ẢNH ---
+    const textureLoader = new THREE.TextureLoader();
+    // Thay thế URL này bằng URL hình ảnh bạn muốn hiển thị
+    // Ví dụ: một hình ảnh của một cô gái.
+    // Đảm bảo URL là hợp lệ hoặc hình ảnh được đặt trong cùng thư mục với file HTML.
+    const imageUrl = 'https://i.ibb.co/L5hYwP7/girl-image.jpg'; // URL ảnh mẫu
+    
+    let planeMaterial;
+    let planeMesh;
+
+    textureLoader.load(imageUrl, function(texture) {
+        planeMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 0, // Bắt đầu với độ trong suốt hoàn toàn
+            side: THREE.DoubleSide
+        });
+        
+        const aspectRatio = texture.image.width / texture.image.height;
+        const planeHeight = 250; // Chiều cao cố định của ảnh
+        const planeWidth = planeHeight * aspectRatio;
+
+        const planeGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+        planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+        planeMesh.position.z = -10; // Đặt ảnh hơi lùi về sau các hạt
+        scene.add(planeMesh);
+    }, undefined, function(err) {
+        console.error('Lỗi tải ảnh:', err);
+        statusText.innerText = "Lỗi tải ảnh. Kiểm tra URL!";
+    });
+
     // --- XỬ LÝ AI MEDIAPIPE ---
     const videoElement = document.getElementById('input_video');
     const statusText = document.getElementById('status');
     
     let targetX = 0, targetY = 0;
     let targetRotationX = 0, targetRotationY = 0;
-    let expansion = 0;
+    let expansion = 0; // Từ 0 (cầu) đến 1 (bung tỏa)
 
     function onResults(results) {
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -92,7 +123,7 @@
 
             // 1. Vị trí và Xoay (Dựa trên cổ tay - điểm 0)
             const wrist = hand[0];
-            targetX = (wrist.x - 0.5) * 800;
+            targetX = (wrist.x - 0.5) * 800; // Điều chỉnh để di chuyển mượt hơn
             targetY = -(wrist.y - 0.5) * 600;
             targetRotationY = (wrist.x - 0.5) * Math.PI * 2;
             targetRotationX = (wrist.y - 0.5) * Math.PI;
@@ -105,10 +136,11 @@
                 Math.pow(thumbIdx.y - indexIdx.y, 2)
             );
             
-            // Map khoảng cách chụm tay vào độ bung tỏa (0.05 là chụm, 0.2 là xòe)
-            expansion = Math.max(0, (pinchDist - 0.05) * 15);
+            // map khoảng cách chụm tay vào độ bung tỏa, giới hạn từ 0 đến 1
+            expansion = Math.max(0, Math.min(1, (pinchDist - 0.05) * 8)); // 0.05 là chụm, 0.175 là xòe hoàn toàn
         } else {
             statusText.innerText = "Hãy giơ 1 bàn tay lên";
+            expansion = 0; // Khi không có tay, thu về hình cầu
         }
     }
 
@@ -126,23 +158,32 @@
     function animate() {
         requestAnimationFrame(animate);
 
-        // Làm mượt di chuyển và xoay
+        // Tự động xoay nhẹ nhàng
+        particleSystem.rotation.y += 0.001; 
+        particleSystem.rotation.x += 0.0005;
+
+        // Làm mượt di chuyển và xoay theo tay
         particleSystem.position.x += (targetX - particleSystem.position.x) * 0.1;
         particleSystem.position.y += (targetY - particleSystem.position.y) * 0.1;
-        particleSystem.rotation.y += (targetRotationY - particleSystem.rotation.y) * 0.05;
-        particleSystem.rotation.x += (targetRotationX - particleSystem.rotation.x) * 0.05;
-
-        // Cập nhật hạt
+        
+        // Cập nhật hạt theo độ bung tỏa
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
-            const factor = 1 + expansion;
-            positions[i3] = originalPos[i3] * factor;
-            positions[i3+1] = originalPos[i3+1] * factor;
-            positions[i3+2] = originalPos[i3+2] * factor;
+            // Dùng hàm ease-out để tạo hiệu ứng bung tỏa mượt mà hơn
+            const easedExpansion = 1 + (1 - Math.cos(expansion * Math.PI / 2)) * 3; 
+
+            positions[i3] = originalPos[i3] * easedExpansion;
+            positions[i3+1] = originalPos[i3+1] * easedExpansion;
+            positions[i3+2] = originalPos[i3+2] * easedExpansion;
         }
         geometry.attributes.position.needsUpdate = true;
 
+        // Cập nhật độ trong suốt của ảnh
+        if (planeMaterial) {
+            planeMaterial.opacity += (expansion - planeMaterial.opacity) * 0.1;
+        }
+        
         renderer.render(scene, camera);
     }
 
