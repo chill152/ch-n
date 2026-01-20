@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Gesture Particle Control</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #0a0a0a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        input[type="color"] {
+            border: none;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            background: transparent;
+        }
+
+        #video-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #333;
+            transform: scaleX(-1); /* Mirror view */
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        canvas#particleCanvas {
+            display: block;
+        }
+
+        .status {
+            font-size: 0.8em;
+            color: #00ff88;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h2 style="margin-top:0">Particle Gesture</h2>
+        <div class="control-group">
+            <label>Màu sắc hạt</label>
+            <input type="color" id="particleColor" value="#00d4ff">
+        </div>
+        <div class="status" id="status">Đang khởi tạo camera...</div>
+        <p style="font-size: 0.7em; opacity: 0.7;">Chụm/Xòe 2 tay để điều khiển khối cầu</p>
+    </div>
+
+    <div id="video-container">
+        <video id="input_video"></video>
+    </div>
+
+    <canvas id="particleCanvas"></canvas>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('particleCanvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const colorPicker = document.getElementById('particleColor');
+        const statusText = document.getElementById('status');
+
+        let particles = [];
+        let expansionFactor = 0; // 0 = Sphere, 1 = Expanded
+        let currentColor = colorPicker.value;
+
+        // Resize canvas
+        function resize() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Particle Class
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.theta = Math.random() * Math.PI * 2;
+                this.phi = Math.acos((Math.random() * 2) - 1);
+                this.baseRadius = 150;
+                this.randomOffset = Math.random() * 300;
+                this.size = Math.random() * 2 + 1;
+            }
+
+            draw(expand) {
+                const centerX = canvasElement.width / 2;
+                const centerY = canvasElement.height / 2;
+                
+                // Tính toán vị trí dựa trên expansionFactor
+                const currentRadius = this.baseRadius + (expand * this.randomOffset);
+                
+                const x = centerX + currentRadius * Math.sin(this.phi) * Math.cos(this.theta);
+                const y = centerY + currentRadius * Math.sin(this.phi) * Math.sin(this.theta);
+
+                canvasCtx.beginPath();
+                canvasCtx.arc(x, y, this.size, 0, Math.PI * 2);
+                canvasCtx.fillStyle = currentColor;
+                canvasCtx.fill();
+            }
+        }
+
+        // Initialize particles
+        for (let i = 0; i < 500; i++) {
+            particles.push(new Particle());
+        }
+
+        function onResults(results) {
+            statusText.innerText = results.multiHandLandmarks.length > 0 ? "Đã nhận diện tay" : "Đang tìm tay...";
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
+                // Lấy vị trí trung tâm của 2 bàn tay
+                const hand1 = results.multiHandLandmarks[0][0]; // Cổ tay tay 1
+                const hand2 = results.multiHandLandmarks[1][0]; // Cổ tay tay 2
+
+                // Tính khoảng cách giữa 2 tay
+                const dx = hand1.x - hand2.x;
+                const dy = hand1.y - hand2.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+
+                // Map khoảng cách vào expansionFactor (0.1 -> 0.6 là khoảng cách tay bình thường)
+                expansionFactor = Math.min(Math.max((distance - 0.2) * 2, 0), 1.5);
+            }
+
+            // Render
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Vẽ các hạt
+            particles.forEach(p => p.draw(expansionFactor * 500));
+            
+            // Vẽ hiệu ứng mờ ảo (Glow)
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.shadowColor = currentColor;
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+        });
+
+    </script>
+</body>
+</html>
