@@ -2,29 +2,26 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>3D Particle Sphere with Image Reveal</title>
+    <title>Reveal Image with Hand Gesture</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-        #video_container { position: absolute; bottom: 15px; right: 15px; width: 160px; height: 120px; border-radius: 10px; overflow: hidden; border: 2px solid #555; transform: scaleX(-1); }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 12px; border: 1px solid #444; }
+        #video_container { position: absolute; bottom: 15px; right: 15px; width: 150px; height: 110px; border-radius: 8px; overflow: hidden; border: 1px solid #666; transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .hint { font-size: 11px; color: #aaa; margin-top: 10px; line-height: 1.4; }
-        input[type="color"] { border: none; width: 100%; height: 30px; cursor: pointer; background: none; }
+        input[type="color"] { border: none; width: 100%; height: 30px; cursor: pointer; background: none; margin-top: 10px; }
+        .hint { font-size: 11px; color: #00ffcc; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <h2 style="margin:0 0 10px 0; font-size: 18px;">Điều khiển ảnh hạt 3D</h2>
-    <input type="color" id="colorPicker" value="#9933ff">
-    <div id="status" style="margin-top:10px; color:#9933ff; font-size:13px">Khởi tạo AI...</div>
-    <div class="hint">
-        • Di chuyển tay để xoay & di chuyển<br>
-        • Chụm/Xòe ngón cái & trỏ để thu phóng và hiển thị ảnh
-    </div>
+    <h3 style="margin:0">Hạt Mở Ảnh 3D</h3>
+    <input type="color" id="colorPicker" value="#00fbff">
+    <div id="status" style="margin-top:10px; font-size:12px">Đang tải AI...</div>
+    <div class="hint">• Chụm tay: Che ảnh<br>• Xòe ngón cái & trỏ: Mở ảnh</div>
 </div>
 
 <div id="video_container">
@@ -35,112 +32,78 @@
     // --- CẤU HÌNH THREE.JS ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: true cho phép nền trong suốt
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    camera.position.z = 600;
+    camera.position.z = 500;
 
-    // Tạo hệ thống hạt
-    const particleCount = 3000;
-    const geometry = new THREE.BufferGeometry();
-    const posArray = new Float32Array(particleCount * 3);
-    const originalPos = new Float32Array(particleCount * 3);
+    // --- TẠO ẢNH PHÍA SAU ---
+    const loader = new THREE.TextureLoader();
+    // Bạn có thể thay đổi link ảnh ở đây
+    const imgUrl = 'https://www.pinterest.com/pin/300404237650697700/'; 
+    let photoMesh;
+
+    loader.load(imgUrl, (texture) => {
+        const geometry = new THREE.PlaneGeometry(400, 300);
+        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+        photoMesh = new THREE.Mesh(geometry, material);
+        photoMesh.position.z = -50; // Nằm sau lớp hạt
+        scene.add(photoMesh);
+    });
+
+    // --- TẠO HỆ THỐNG HẠT (CHẮN ẢNH) ---
+    const particleCount = 5000;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(particleCount * 3);
+    const dest = new Float32Array(particleCount * 3); // Vị trí khi mở ra
 
     for (let i = 0; i < particleCount; i++) {
+        // Trạng thái đóng: Hình cầu đặc che ảnh
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos((Math.random() * 2) - 1);
-        const r = 120;
+        const r = 180; 
 
-        const x = r * Math.sin(phi) * Math.cos(theta);
-        const y = r * Math.sin(phi) * Math.sin(theta);
-        const z = r * Math.cos(phi);
+        pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        pos[i * 3 + 2] = r * Math.cos(phi) + 50; // Đẩy lên trước ảnh
 
-        posArray[i * 3] = x;
-        posArray[i * 3 + 1] = y;
-        posArray[i * 3 + 2] = z;
-        
-        originalPos[i * 3] = x;
-        originalPos[i * 3 + 1] = y;
-        originalPos[i * 3 + 2] = z;
+        // Trạng thái mở: Các hạt dạt ra biên
+        dest[i * 3] = pos[i * 3] * 3; 
+        dest[i * 3 + 1] = pos[i * 3 + 1] * 3;
+        dest[i * 3 + 2] = pos[i * 3 + 2];
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-    const material = new THREE.PointsMaterial({
-        size: 2.5,
-        color: 0x9933ff, // Màu mặc định
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        opacity: 0.8
-    });
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    const mat = new THREE.PointsMaterial({ size: 2.5, color: 0x00fbff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
 
-    const particleSystem = new THREE.Points(geometry, material);
-    scene.add(particleSystem);
-
-    // --- HIỆU ỨNG ẢNH ---
-    const textureLoader = new THREE.TextureLoader();
-    // Thay thế URL này bằng URL hình ảnh bạn muốn hiển thị
-    // Ví dụ: một hình ảnh của một cô gái.
-    // Đảm bảo URL là hợp lệ hoặc hình ảnh được đặt trong cùng thư mục với file HTML.
-    const imageUrl = 'https://i.ibb.co/L5hYwP7/girl-image.jpg'; // URL ảnh mẫu
-    
-    let planeMaterial;
-    let planeMesh;
-
-    textureLoader.load(imageUrl, function(texture) {
-        planeMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            transparent: true,
-            opacity: 0, // Bắt đầu với độ trong suốt hoàn toàn
-            side: THREE.DoubleSide
-        });
-        
-        const aspectRatio = texture.image.width / texture.image.height;
-        const planeHeight = 250; // Chiều cao cố định của ảnh
-        const planeWidth = planeHeight * aspectRatio;
-
-        const planeGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-        planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
-        planeMesh.position.z = -10; // Đặt ảnh hơi lùi về sau các hạt
-        scene.add(planeMesh);
-    }, undefined, function(err) {
-        console.error('Lỗi tải ảnh:', err);
-        statusText.innerText = "Lỗi tải ảnh. Kiểm tra URL!";
-    });
-
-    // --- XỬ LÝ AI MEDIAPIPE ---
+    // --- AI NHẬN DIỆN TAY ---
     const videoElement = document.getElementById('input_video');
     const statusText = document.getElementById('status');
-    
-    let targetX = 0, targetY = 0;
-    let targetRotationX = 0, targetRotationY = 0;
-    let expansion = 0; // Từ 0 (cầu) đến 1 (bung tỏa)
+    let revealFactor = 0; // 0: Đóng, 1: Mở hoàn toàn
+    let targetRotY = 0;
 
     function onResults(results) {
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            statusText.innerText = "Đã nhận diện bàn tay";
+            statusText.innerText = "Tay đang điều khiển";
             const hand = results.multiHandLandmarks[0];
+            
+            // Xoay trục theo tay
+            targetRotY = (hand[0].x - 0.5) * 2;
 
-            // 1. Vị trí và Xoay (Dựa trên cổ tay - điểm 0)
-            const wrist = hand[0];
-            targetX = (wrist.x - 0.5) * 800; // Điều chỉnh để di chuyển mượt hơn
-            targetY = -(wrist.y - 0.5) * 600;
-            targetRotationY = (wrist.x - 0.5) * Math.PI * 2;
-            targetRotationX = (wrist.y - 0.5) * Math.PI;
-
-            // 2. Thu phóng (Dựa trên khoảng cách ngón cái [4] và ngón trỏ [8])
-            const thumbIdx = hand[4];
-            const indexIdx = hand[8];
-            const pinchDist = Math.sqrt(
-                Math.pow(thumbIdx.x - indexIdx.x, 2) + 
-                Math.pow(thumbIdx.y - indexIdx.y, 2)
+            // Tính độ xòe ngón cái (4) và ngón trỏ (8)
+            const d = Math.sqrt(
+                Math.pow(hand[4].x - hand[8].x, 2) + 
+                Math.pow(hand[4].y - hand[8].y, 2)
             );
             
-            // map khoảng cách chụm tay vào độ bung tỏa, giới hạn từ 0 đến 1
-            expansion = Math.max(0, Math.min(1, (pinchDist - 0.05) * 8)); // 0.05 là chụm, 0.175 là xòe hoàn toàn
+            // Cập nhật mức độ mở ảnh (từ 0.05 đến 0.2)
+            revealFactor = Math.min(Math.max((d - 0.05) * 7, 0), 1);
         } else {
-            statusText.innerText = "Hãy giơ 1 bàn tay lên";
-            expansion = 0; // Khi không có tay, thu về hình cầu
+            statusText.innerText = "Hãy giơ tay trước cam";
+            revealFactor = 0;
         }
     }
 
@@ -148,47 +111,39 @@
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
     hands.onResults(onResults);
 
-    const cam = new Camera(videoElement, {
+    const cameraUtils = new Camera(videoElement, {
         onFrame: async () => { await hands.send({image: videoElement}); },
         width: 640, height: 480
     });
-    cam.start();
+    cameraUtils.start();
 
-    // --- ANIMATION LOOP ---
+    // --- VÒNG LẶP CẬP NHẬT ---
     function animate() {
         requestAnimationFrame(animate);
 
-        // Tự động xoay nhẹ nhàng
-        particleSystem.rotation.y += 0.001; 
-        particleSystem.rotation.x += 0.0005;
+        // Tự động xoay nhẹ nhàng quanh trục
+        points.rotation.y += 0.005 + (targetRotY * 0.05);
+        if(photoMesh) photoMesh.rotation.y = points.rotation.y * 0.5;
 
-        // Làm mượt di chuyển và xoay theo tay
-        particleSystem.position.x += (targetX - particleSystem.position.x) * 0.1;
-        particleSystem.position.y += (targetY - particleSystem.position.y) * 0.1;
-        
-        // Cập nhật hạt theo độ bung tỏa
-        const positions = geometry.attributes.position.array;
+        // Di chuyển từng hạt dựa trên revealFactor
+        const currentPos = geo.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
-            // Dùng hàm ease-out để tạo hiệu ứng bung tỏa mượt mà hơn
-            const easedExpansion = 1 + (1 - Math.cos(expansion * Math.PI / 2)) * 3; 
-
-            positions[i3] = originalPos[i3] * easedExpansion;
-            positions[i3+1] = originalPos[i3+1] * easedExpansion;
-            positions[i3+2] = originalPos[i3+2] * easedExpansion;
+            // Nội suy (Interpolation) giữa vị trí đóng và vị trí mở
+            currentPos[i3] += ( (pos[i3] + (dest[i3] - pos[i3]) * revealFactor) - currentPos[i3] ) * 0.1;
+            currentPos[i3+1] += ( (pos[i3+1] + (dest[i3+1] - pos[i3+1]) * revealFactor) - currentPos[i3+1] ) * 0.1;
+            currentPos[i3+2] += ( (pos[i3+2] + (dest[i3+2] - pos[i3+2]) * revealFactor) - currentPos[i3+2] ) * 0.1;
         }
-        geometry.attributes.position.needsUpdate = true;
+        geo.attributes.position.needsUpdate = true;
 
-        // Cập nhật độ trong suốt của ảnh
-        if (planeMaterial) {
-            planeMaterial.opacity += (expansion - planeMaterial.opacity) * 0.1;
-        }
-        
+        // Hiệu ứng hạt mờ dần khi mở ảnh để nhìn rõ ảnh hơn
+        mat.opacity = 0.8 - (revealFactor * 0.5);
+
         renderer.render(scene, camera);
     }
 
     document.getElementById('colorPicker').addEventListener('input', (e) => {
-        material.color.set(e.target.value);
+        mat.color.set(e.target.value);
     });
 
     window.addEventListener('resize', () => {
