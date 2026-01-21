@@ -2,12 +2,31 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Multi-Color 3-Tier Cake Reveal</title>
+    <title>Happy Birthday cô Nhung - 3D Particles</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #050005; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050005; font-family: 'Segoe UI', Arial, sans-serif; }
+        
+        /* Hiệu ứng chữ Chúc mừng sinh nhật */
+        #birthday-text {
+            position: absolute;
+            top: 15%;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            font-size: 45px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 40px #ff00ff;
+            z-index: 50;
+            opacity: 0; /* Mặc định ẩn, hiện khi xòe tay */
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+        }
+
         #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: white; background: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
         #video_container { position: absolute; bottom: 15px; right: 15px; width: 160px; height: 120px; border-radius: 10px; overflow: hidden; transform: scaleX(-1); border: 2px solid #ff00ff; }
         video { width: 100%; height: 100%; object-fit: cover; }
@@ -16,12 +35,14 @@
 </head>
 <body>
 
+<div id="birthday-text">Chúc mừng sinh nhật cô Nhung</div>
+
 <div id="ui">
-    <h3 style="margin:0; color: #ff3399;">Birthday Cake Pro</h3>
-    <div id="status" style="font-size:12px; margin-top:5px; color:#00ff00;">Đang khởi động camera...</div>
+    <h3 style="margin:0; color: #ff3399;">Birthday Pro for cô Nhung</h3>
+    <div id="status" style="font-size:12px; margin-top:5px; color:#00ff00;">Đang kết nối Camera...</div>
     <div class="instructions">
-        • <b>Xoay:</b> Di chuyển ngón trỏ trái/phải (ảnh vẫn giữ nguyên)<br>
-        • <b>Mở/Đóng:</b> Xòe lòng bàn tay để mở - Khép tay để đóng
+        • <b>Xoay:</b> Di chuyển ngón trỏ trái/phải<br>
+        • <b>Mở quà:</b> Xòe lòng bàn tay để hiện chữ và ảnh
     </div>
 </div>
 
@@ -36,6 +57,8 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
     camera.position.z = 600;
+
+    const birthdayLabel = document.getElementById('birthday-text');
 
     // --- NẠP ẢNH ---
     const imgUrl = 'sinhnhat.jpg'; 
@@ -54,50 +77,32 @@
     const dest = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
 
-    const palette = [
-        new THREE.Color(0xff00ff), // Hồng
-        new THREE.Color(0x00ffff), // Cyan
-        new THREE.Color(0xffff00), // Vàng
-        new THREE.Color(0xffffff), // Trắng
-        new THREE.Color(0xff6600)  // Cam
-    ];
+    const palette = [new THREE.Color(0xff00ff), new THREE.Color(0x00ffff), new THREE.Color(0xffff00), new THREE.Color(0xffffff)];
 
     function createTier(startIndex, count, radius, bottom, top) {
         for (let i = startIndex; i < startIndex + count; i++) {
             const angle = Math.random() * Math.PI * 2;
             const r = Math.random() * radius; 
             const h = Math.random() * (top - bottom) + bottom;
-            
             pos[i * 3] = Math.cos(angle) * r;
             pos[i * 3 + 1] = h;
             pos[i * 3 + 2] = Math.sin(angle) * r;
-            
             dest[i * 3] = pos[i * 3] * 6;
             dest[i * 3 + 1] = pos[i * 3 + 1] * 4;
             dest[i * 3 + 2] = pos[i * 3 + 2] * 6;
-
-            // Gán màu ngẫu nhiên từ palette
             const color = palette[Math.floor(Math.random() * palette.length)];
-            colors[i * 3] = color.r;
-            colors[i * 3 + 1] = color.g;
-            colors[i * 3 + 2] = color.b;
+            colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
         }
     }
 
-    createTier(0, 4000, 160, -120, -30);  // Tầng 1
-    createTier(4000, 3000, 110, -30, 60);  // Tầng 2
-    createTier(7000, 1500, 70, 60, 120);   // Tầng 3
-    createTier(8500, 500, 8, 120, 180);    // Nến
+    createTier(0, 4000, 160, -120, -30); 
+    createTier(4000, 3000, 110, -30, 60); 
+    createTier(7000, 1500, 70, 60, 120);  
+    createTier(8500, 500, 8, 120, 180);   
 
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const mat = new THREE.PointsMaterial({ 
-        size: 2.5, 
-        vertexColors: true, 
-        transparent: true, 
-        blending: THREE.AdditiveBlending 
-    });
+    const mat = new THREE.PointsMaterial({ size: 2.5, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
     const points = new THREE.Points(geo, mat);
     scene.add(points);
 
@@ -109,24 +114,18 @@
 
     function onResults(results) {
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            document.getElementById('status').innerText = "Đang nhận diện tay...";
+            document.getElementById('status').innerText = "Đã thấy tay!";
             const hand = results.multiHandLandmarks[0];
-            
-            // Xoay dựa trên ngón trỏ
             const indexFinger = hand[8];
-            if (Math.abs(indexFinger.x - 0.5) > 0.1) {
-                rotationSpeed = (indexFinger.x - 0.5) * 0.12;
-            } else {
-                rotationSpeed = 0;
-            }
-
-            // Mở bánh khi xòe lòng bàn tay
+            rotationSpeed = Math.abs(indexFinger.x - 0.5) > 0.05 ? (indexFinger.x - 0.5) * 0.15 : 0;
             const isOpened = hand[8].y < hand[6].y && hand[12].y < hand[10].y && hand[16].y < hand[14].y && hand[20].y < hand[18].y;
             revealFactor = THREE.MathUtils.lerp(revealFactor, isOpened ? 1 : 0, 0.08);
         } else {
             rotationSpeed = 0;
             revealFactor = THREE.MathUtils.lerp(revealFactor, 0, 0.05);
         }
+        // Cập nhật chữ trên màn hình
+        birthdayLabel.style.opacity = revealFactor > 0.5 ? 1 : 0;
     }
 
     const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
@@ -136,26 +135,21 @@
 
     function animate() {
         requestAnimationFrame(animate);
-
         currentRotY += rotationSpeed;
         points.rotation.y = currentRotY;
-        if(photoMesh) photoMesh.rotation.y = currentRotY;
-
+        if(photoMesh) {
+            photoMesh.rotation.y = currentRotY;
+            photoMesh.material.opacity = revealFactor;
+            photoMesh.scale.set(revealFactor, revealFactor, revealFactor);
+        }
         const pArray = geo.attributes.position.array;
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
-            // Di chuyển mượt mà giữa trạng thái bánh và trạng thái bung tỏa
             pArray[i3] += ((pos[i3] + (dest[i3] - pos[i3]) * revealFactor) - pArray[i3]) * 0.1;
             pArray[i3+1] += ((pos[i3+1] + (dest[i3+1] - pos[i3+1]) * revealFactor) - pArray[i3+1]) * 0.1;
             pArray[i3+2] += ((pos[i3+2] + (dest[i3+2] - pos[i3+2]) * revealFactor) - pArray[i3+2]) * 0.1;
         }
         geo.attributes.position.needsUpdate = true;
-
-        if(photoMesh) {
-            photoMesh.material.opacity = revealFactor;
-            // Ảnh sẽ luôn hiện và xoay theo trục khi revealFactor > 0
-            photoMesh.scale.set(revealFactor, revealFactor, revealFactor);
-        }
         renderer.render(scene, camera);
     }
     animate();
